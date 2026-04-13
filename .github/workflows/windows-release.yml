@@ -1,0 +1,46 @@
+name: Windows Release
+
+on:
+  push:
+    tags:
+      - "v*-windows"
+      - "v*"
+
+jobs:
+  release:
+    name: Build & Release Windows
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: windows-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: windows-app/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: windows-app/src-tauri -> target
+      - run: pnpm install --frozen-lockfile
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - run: pnpm tauri:build
+        name: Build Tauri App
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            windows-app/src-tauri/target/release/bundle/msi/*.msi
+            windows-app/src-tauri/target/release/bundle/nsis/*.exe
+          generate_release_notes: true
